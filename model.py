@@ -152,5 +152,76 @@ class Encoder(nn.Module):
             x = layer(x,mask)
             
         return self.norm(x)
+    
+    
+class DecoderBlock(nn.Module):
+    def __init__(self, self_attention_block: MultiHeadAttentionBlock, cross_attention_block: MultiHeadAttentionBlock, feed_forward: FeedForwardBlock, dropout: float) -> None:
+        super().__init__()
+        self.self_attention_block = self_attention_block
+        self.cross_attention_block = cross_attention_block
+        self.feed_forward = feed_forward
+        self.residual_connections = nn.ModuleList(ResidualConnection(dropout) for _ in range(3))
         
         
+    def forward(self, x, encoder_output, source_mask, target_mask):
+        x = self.residual_connections[0](x,lambda x: self.self_attention_block(x,x,x,target_mask))
+        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, encoder_output, encoder_output, source_mask))
+        x = self.residual_connections[2](x,self.feed_forward)
+        return x
+    
+
+class Decoder(nn.Module):
+    def __init__(self, layers:nn.ModuleList) -> None:
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization()
+        
+    def forward(self, x, encoder_output, source_mask, target_mask):
+        for layer in self.layers:
+            x = layer(x, encoder_output, source_mask, target_mask)
+            
+        x = self.norm(x)
+        return x
+        
+        
+class ProjectionLayer(nn.Module):
+    def __init__(self, d_model: int, vocab_size: int) -> None:
+        super().__init__()
+        self.proj  = nn.Linear(d_model, vocab_size)
+        
+    def forward(self, x):
+        return torch.log_softmax(self.proj(x), dim =-11)
+    
+    
+    
+class Transformerblock(nn.Module):
+    def __init__(self, encoder: Encoder, 
+                 decoder: Decoder, 
+                 source_embed: InputEmbeddings, 
+                 target_embed: InputEmbeddings, 
+                 source_pos: PositionalEncding,
+                 target_pos = PositionalEncding,
+                 proj_layer = ProjectionLayer) -> None:
+        
+        self.encoder = encoder
+        self.decoder = decoder
+        self.source_embed = source_embed
+        self.target_embed = target_embed
+        self.source_pos = source_pos
+        self.target_pos = target_pos 
+        self.proj_layer = proj_layer
+        
+        
+    def encode(self, source, source_mask):
+        src = self.source_embed(source)
+        src = self.source_pos(src)
+        return self.encoder(src, source_mask)
+    
+    
+    def decode(self, encoder_output, source_mask, target, target_mask):
+        target = self.target_embed(target)
+        target = self.target_pos(target)
+        return self.decode(target, encoder_output, source_mask, target_mask)
+    
+    def project(self,x):
+        return self.proj_layer(x)
