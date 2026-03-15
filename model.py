@@ -126,4 +126,31 @@ class ResidualConnection(nn.Module):
         return x + self.dropout(sublayer(self.norm(x)))
     
         
+class Encoderblock(nn.Module):
+    def __init__(self, self_attention_block: MultiHeadAttentionBlock, feed_forward: FeedForwardBlock, dropout: float) -> None:
+        super().__init__()
+        self.self_attention_block = self_attention_block
+        self.feed_forward_block = feed_forward
+        self.residual_connections = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
+        
+    # avoid interaction of padding word with other words
+    def forward(self,x, source_mask):
+        x = self.residual_connections[0](x, lambda x:self.self_attention_block(x,x,x, source_mask))
+        x = self.residual_connections[1](x, self.feed_forward_block)
+        return x
+    
+
+class Encoder(nn.Module):
+    def __init__(self, layers: nn.ModuleList) -> None:
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization()
+        
+        
+    def forwar(self, x,mask):
+        for layer in self.layers:
+            x = layer(x,mask)
+            
+        return self.norm(x)
+        
         
