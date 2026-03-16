@@ -15,9 +15,7 @@ from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
-from torch.utils.tensorboard import SummaryWriter
-
-import tqdm
+from tqdm import tqdm
 from pathlib import Path
 
 
@@ -32,14 +30,16 @@ def get_or_build_tokenizer(config, ds, lang):
     tokenizer_path = Path(config["tokenizer_file"].format(lang))
     
     if not Path.exists(tokenizer_path):
-        tokenizer = Tokenizer(WordLevel(uk_token='[UNK]'))
-        tokenizer.pre_tokenizer = Whitespace
+        tokenizer = Tokenizer(WordLevel(unk_token='[UNK]'))
+        tokenizer.pre_tokenizer = Whitespace()
         trainer = WordLevelTrainer(special_tokens=["[UNK]","[PAD]","[SOS]","[EOS]"], min_frequency=2)
         tokenizer.train_from_iterator(get_all_sentences(ds,lang), trainer=trainer)
         tokenizer.save(str(tokenizer_path))
 
     else:
         tokenizer = Tokenizer.from_file(str(tokenizer_path))        
+
+    return tokenizer
 
 
 def get_ds(config):
@@ -73,9 +73,9 @@ def get_ds(config):
     
     
     train_dataloader = DataLoader(train_ds, batch_size=config["batch_size"], shuffle=True)
-    val_ataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
+    val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
     
-    return train_dataloader, val_ataloader, tokenizer_src, tokenizer_tgt
+    return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
     
     
 
@@ -94,9 +94,6 @@ def train_model(config):
     
     train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds(config)
     model = get_model(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
-    
-    # Tensorboard 
-    writer = SummaryWriter(config['experiment_name'])
     
     optimizer = torch.optim.Adam(model.parameters(), lr = config['lr'], eps = 1e-9)
     
@@ -134,16 +131,12 @@ def train_model(config):
             loss = loss_fn(proj_output.view(-1,tokenizer_tgt.get_vocab_size()), label.view(-1))
             batch_iterator.set_postfix({f'loss': f'{loss.item():6.3f}'})
             
-            # log the loss
-            writer.add_scalar('train_loss', loss.item(), global_step)
-            writer.flush()
-            
             loss.backward()
             
             optimizer.step()
-            optimizer.zero_graD()
+            optimizer.zero_grad()
             
-            global_Step +=1
+            global_step += 1
             
         
         model_filename = get_weights_file_path(config, f'{epoch:02d}')

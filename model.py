@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import math
 
-class InputEmbeddings(nn.Modul):
+class InputEmbeddings(nn.Module):
     def __init__(self, d_model: int, vocab_size: int):
         super().__init__()
         self.d_model = d_model
@@ -23,7 +23,7 @@ class PositionalEncding(nn.Module):
         
         # create matrix of shape (seq_len, d_model)
         pe = torch.zeros(seq_len,d_model)
-        position = torch.arange(0,seq_len-1, dtype = torch.float).unsequeez(1)  # (seq_len,1)
+        position = torch.arange(0,seq_len, dtype = torch.float).unsqueeze(1)  # (seq_len,1)
         div_term = torch.exp(torch.arange(0,d_model,2).float() * (-math.log(10000.0) / d_model))
         
         # apply sin and cos positions
@@ -43,8 +43,8 @@ class LayerNormalization(nn.Module):
     def __init__(self, eps: float = 1e-6) -> None:
         super().__init__()
         self.eps = eps
-        self.gamma = nn.parameter(torch.ones(1))
-        self.beta = nn.parameter(torch.zeros(1))
+        self.gamma = nn.Parameter(torch.ones(1))
+        self.beta = nn.Parameter(torch.zeros(1))
         
     def forward(self,x):
         mean = x.mean(dim = -1, keepdim = True)
@@ -63,21 +63,21 @@ class FeedForwardBlock(nn.Module):
         return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
         
         
-class MultiHeadAttentionBlock(nn.Model):
+class MultiHeadAttentionBlock(nn.Module):
     def __init__(self, d_model: int, h: int, dropout:float) -> None:
         super().__init__()
         self.d_model = d_model
         self.h = h
         assert (d_model%h == 0), "d_model is not divisible by h"
         
-        self.d_k = d_model/h
+        self.d_k = d_model // h
         self.w_q = nn.Linear(d_model,d_model)
         self.w_k = nn.Linear(d_model,d_model)
         self.w_v = nn.Linear(d_model,d_model)
         
         self.w_o = nn.Linear(d_model,d_model)
         
-        self.dropout = nn.Dropout(self.droppout)
+        self.dropout = nn.Dropout(dropout)
         
     @staticmethod
     def attention(query, key, value, mask, dropout:nn.Dropout):
@@ -147,7 +147,7 @@ class Encoder(nn.Module):
         self.norm = LayerNormalization()
         
         
-    def forwar(self, x,mask):
+    def forward(self, x,mask):
         for layer in self.layers:
             x = layer(x,mask)
             
@@ -190,7 +190,7 @@ class ProjectionLayer(nn.Module):
         self.proj  = nn.Linear(d_model, vocab_size)
         
     def forward(self, x):
-        return torch.log_softmax(self.proj(x), dim =-11)
+        return self.proj(x)
     
     
     
@@ -200,8 +200,9 @@ class Transformer(nn.Module):
                  source_embed: InputEmbeddings, 
                  target_embed: InputEmbeddings, 
                  source_pos: PositionalEncding,
-                 target_pos = PositionalEncding,
-                 proj_layer = ProjectionLayer) -> None:
+                 target_pos: PositionalEncding,
+                 proj_layer: ProjectionLayer) -> None:
+        super().__init__()
         
         self.encoder = encoder
         self.decoder = decoder
@@ -221,7 +222,7 @@ class Transformer(nn.Module):
     def decode(self, encoder_output, source_mask, target, target_mask):
         target = self.target_embed(target)
         target = self.target_pos(target)
-        return self.decode(target, encoder_output, source_mask, target_mask)
+        return self.decoder(target, encoder_output, source_mask, target_mask)
     
     def project(self,x):
         return self.proj_layer(x)
@@ -275,7 +276,7 @@ def build_transformer(source_vocab_size: int,
     transformer = Transformer(encoder, decoder, src_embed, tgt_embed, src_pos, tgt_pos, proj_layer)
     
     # initialize params
-    for p in transformer.parameter():
+    for p in transformer.parameters():
         if p.dim() > 1: 
             nn.init.xavier_uniform_(p)
             

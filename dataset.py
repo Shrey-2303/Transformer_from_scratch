@@ -15,6 +15,7 @@ class BilingualDataset(Dataset):
         self.tokenizer_tgt = tokenizer_tgt
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
+        self.seq_len = seq_len
         
         self.sos_token = torch.tensor([tokenizer_src.token_to_id('[SOS]')], dtype = torch.int64)
         self.eos_token = torch.tensor([tokenizer_src.token_to_id('[EOS]')], dtype = torch.int64)
@@ -31,8 +32,8 @@ class BilingualDataset(Dataset):
         enc_input_tokens = self.tokenizer_src.encode(src_text).ids
         dec_input_tokens = self.tokenizer_tgt.encode(tgt_text).ids
         
-        enc_num_padding_tokens = self.seq_len(enc_input_tokens) - 2
-        dec_num_padding_tokens = self.seq_len(dec_input_tokens) - 1
+        enc_num_padding_tokens = self.seq_len - len(enc_input_tokens) - 2
+        dec_num_padding_tokens = self.seq_len - len(dec_input_tokens) - 1
         
         if enc_num_padding_tokens < 0 or dec_num_padding_tokens < 0: 
             raise ValueError('Sentence is too long')
@@ -42,7 +43,7 @@ class BilingualDataset(Dataset):
                 self.sos_token,
                 torch.tensor(enc_input_tokens, dtype = torch.int64),
                 self.eos_token,
-                torch.tensor([self.pad_token*enc_num_padding_tokens], dtype = torch.int64)
+                torch.tensor([self.pad_token.item()] * enc_num_padding_tokens, dtype=torch.int64)
             ]
         )
         
@@ -50,7 +51,7 @@ class BilingualDataset(Dataset):
             [
                 self.sos_token,
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
-                torch.tensor([self.pad_token]*dec_num_padding_tokens, dtype = torch.int64)
+                torch.tensor([self.pad_token.item()] * dec_num_padding_tokens, dtype=torch.int64)
             ]
         )
         
@@ -58,7 +59,7 @@ class BilingualDataset(Dataset):
             [
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
                 self.eos_token,
-                torch.tensor([self.pad_token]*dec_num_padding_tokens, dtype = torch.int64)                
+                torch.tensor([self.pad_token.item()] * dec_num_padding_tokens, dtype=torch.int64)
             ]
         )
         
